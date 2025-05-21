@@ -337,35 +337,42 @@ spi_prepare(struct spi_config config)
     spi->CR1 = config.spi_cr1;
 }
 
-#ifdef SPI_CR2_FRXTH // stm32 f0/f7/g0/l4/g4 supports buffering
-#define CAN_BUFFER 1
-#else
-#define CAN_BUFFER 0
-#endif
-
 void
 spi_transfer(struct spi_config config, uint8_t receive_data,
              uint8_t len, uint8_t *data)
 {
     SPI_TypeDef *spi = config.spi;
+    uint32_t sr = 0;
+    uint8_t rdata = 0;
     uint8_t *wptr = data;
     uint8_t *end = data + len;
     while (data < end) {
-        if (CAN_BUFFER) {
-            uint32_t sr = spi->SR & (SPI_SR_TXE | SPI_SR_RXNE);
-            if ((sr == SPI_SR_TXE) && wptr < end)
+        // stm32 f0/f7/g0/l4/g4 supports buffering
+        #ifdef SPI_CR2_FRXTH
+            sr = spi->SR & (SPI_SR_TXE | SPI_SR_RXNE);
+            // write can be done
+            if ((sr == SPI_SR_TXE) && wptr < end) {
                 writeb((void*)&spi->DR, *wptr++);
-            if (!(sr & SPI_SR_RXNE))
-                 continue;
-        } else {
+            }
+            // read can be done
+            if (sr & SPI_SR_RXNE) {
+               rdata = readb((void*)&spi->DR);
+                if (receive_data) {
+                   *data = rdata;
+                }
+                data++;
+            }
+        // otherwise do not support
+        #else
             writeb((void*)&spi->DR, *data);
             while (!(spi->SR & SPI_SR_RXNE))
                 ;
-        }
-        uint8_t rdata = readb((void*)&spi->DR);
-        if (receive_data)
-            *data = rdata;
-        data++;
+            rdata = readb((void*)&spi->DR);
+            if (receive_data) {
+                *data = rdata;
+            }
+            data++;
+        #endif
     }
     // Wait for any remaining SCLK updates before returning
     while ((spi->SR & (SPI_SR_TXE|SPI_SR_BSY)) != SPI_SR_TXE)
