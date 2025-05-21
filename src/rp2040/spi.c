@@ -134,18 +134,26 @@ void
 spi_transfer(struct spi_config config, uint8_t receive_data,
              uint8_t len, uint8_t *data)
 {
-    uint8_t *wptr = data, *end = data + len;
+    uint32_t sr = 0;
+    uint8_t rdata = 0;
     spi_hw_t *spi = config.spi;
+    uint8_t* wptr = data;
+    uint8_t* end = data + len;
+
     while (data < end) {
-        uint32_t sr = spi->sr & (SPI_SSPSR_TNF_BITS | SPI_SSPSR_RNE_BITS);
-        if (sr == SPI_SSPSR_TNF_BITS && wptr < end && wptr < data + MAX_FIFO)
+        sr = spi->sr & (SPI_SSPSR_TNF_BITS | SPI_SSPSR_RNE_BITS);
+        // write can be done
+        if (sr == SPI_SSPSR_TNF_BITS && wptr < end && wptr < data + MAX_FIFO) {
             spi->dr = *wptr++;
-        if (!(sr & SPI_SSPSR_RNE_BITS))
-            continue;
-        uint8_t rdata = spi->dr;
-        if (receive_data)
-            *data = rdata;
-        data++;
+        }
+        // read can be done
+        if (sr & SPI_SSPSR_RNE_BITS) {
+            rdata = spi->dr;
+            if (receive_data) {
+                *data = rdata;
+            }
+            data++;
+        }
     }
     // Wait for any remaining SCLK updates before returning
     while ((spi->sr & (SPI_SSPSR_TFE_BITS|SPI_SSPSR_BSY_BITS))
