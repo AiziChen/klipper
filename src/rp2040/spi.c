@@ -125,14 +125,25 @@ void
 spi_transfer(struct spi_config config, uint8_t receive_data,
              uint8_t len, uint8_t *data)
 {
+    uint32_t sr = 0;
+    uint8_t rdata = 0;
     spi_hw_t *spi = config.spi;
-    while (len--) {
-        spi->dr = *data;
-        while (!(spi->sr & SPI_SSPSR_RNE_BITS))
-            ;
-        uint8_t rdata = spi->dr;
-        if(receive_data)
-            *data = rdata;
-        data++;
+    uint8_t* wptr = data;
+    uint8_t* end = data + len;
+
+    while (data < end) {
+        sr = spi->sr & (SPI_SSPSR_TNF_BITS | SPI_SSPSR_RNE_BITS);
+        // write can be done
+        if ((sr == SPI_SSPSR_TNF_BITS) && wptr < end) {
+            spi->dr = *wptr++;
+        }
+        // read can be done
+        if (sr & SPI_SSPSR_RNE_BITS) {
+            rdata = spi->dr;
+            if (receive_data) {
+                *data = rdata;
+            }
+            data++;
+        }
     }
 }
