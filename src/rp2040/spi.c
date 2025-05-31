@@ -10,7 +10,9 @@
 #include "internal.h" // pclock, gpio_peripheral
 #include "hardware/structs/spi.h" // spi_hw_t
 #include "hardware/regs/resets.h" // RESETS_RESET_SPI*_BITS
+#include "board/misc.h" // timer_is_before
 
+#define MAX_FIFO 8 // Max RX FIFO size (don't tx past this size)
 
 DECL_ENUMERATION("spi_bus", "spi0_gpio0_gpio3_gpio2", 0);
 DECL_CONSTANT_STR("BUS_PINS_spi0_gpio0_gpio3_gpio2", "gpio0,gpio3,gpio2");
@@ -115,10 +117,16 @@ spi_prepare(struct spi_config config)
     spi_hw_t *spi = config.spi;
     if (spi->cr0 == config.cr0 && spi->cpsr == config.cpsr)
         return;
+    uint32_t diff = spi->cr0 ^ config.cr0;
     spi->cr1 = 0;
     spi->cr0 = config.cr0;
     spi->cpsr = config.cpsr;
     spi->cr1 = SPI_SSPCR1_SSE_BITS;
+    // Give time for state to update before caller changes CS pin
+    uint32_t end = timer_read_time() + timer_from_us(1);
+    if (diff & SPI_SSPCR0_SPO_BITS)
+        while (timer_is_before(timer_read_time(), end))
+            ;
 }
 
 void
@@ -134,7 +142,7 @@ spi_transfer(struct spi_config config, uint8_t receive_data,
     while (data < end) {
         sr = spi->sr & (SPI_SSPSR_TNF_BITS | SPI_SSPSR_RNE_BITS);
         // write can be done
-        if ((sr == SPI_SSPSR_TNF_BITS) && wptr < end) {
+        if ((sr == SPI_SSPSR_TNF_BITS) && wptr < end && wptr < data + MAX_FIFO) {
             spi->dr = *wptr++;
         }
         // read can be done
@@ -146,4 +154,8 @@ spi_transfer(struct spi_config config, uint8_t receive_data,
             data++;
         }
     }
+    // Wait for any remaining SCLK updates before returning
+    while ((spi->sr & (SPI_SSPSR_TFE_BITS|SPI_SSPSR_BSY_BITS))
+           != SPI_SSPSR_TFE_BITS)
+        ;
 }
