@@ -38,7 +38,7 @@ def query_unassigned(canbus_iface):
                 "extended": False}]
     try:
         bus = can.interface.Bus(channel=canbus_iface, can_filters=filters,
-                                bustype='socketcan')
+                                interface='socketcan')
     except OSError as e:
         if e.errno == errno.ENODEV:
             sys.stderr.write(f"Interface {canbus_iface} not found!\n")
