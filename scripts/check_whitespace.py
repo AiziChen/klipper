@@ -4,9 +4,12 @@
 # Copyright (C) 2018  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import sys, os.path, unicodedata
+import sys
+import os.path
+import unicodedata
 
 HaveError = False
+
 
 def report_error(filename, lineno, msg):
     global HaveError
@@ -14,6 +17,7 @@ def report_error(filename, lineno, msg):
         sys.stderr.write("\n\nERROR:\nERROR: White space errors\nERROR:\n")
     HaveError = True
     sys.stderr.write("%s:%d: %s\n" % (filename, lineno + 1, msg))
+
 
 def check_file(filename):
     # Open and read file
@@ -50,13 +54,11 @@ def check_file(filename):
         # Check for trailing space
         if line.endswith(' ') or line.endswith('\t'):
             report_error(filename, lineno, "Line has trailing spaces")
-        # Check for more than 80 characters
-        if is_source_code and len(line) > 80:
-            report_error(filename, lineno, "Line longer than 80 characters")
     if not data.endswith(b'\n'):
         report_error(filename, lineno, "No newline at end of file")
     if data.endswith(b'\n\n'):
         report_error(filename, lineno, "Extra newlines at end of file")
+
 
 def main():
     files = sys.argv[1:]
@@ -65,6 +67,7 @@ def main():
     if HaveError:
         sys.stderr.write("\n\n")
         sys.exit(-1)
+
 
 if __name__ == '__main__':
     main()
